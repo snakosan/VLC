@@ -8,16 +8,21 @@ so feed the powers and their locations and angles and the receiver calculates th
 
 3- ADR implementation, which should be between the FOV lower and upper limit. plot that
 
-4- The imaging reciver
 
-Separate the global main caller and the receiver functionality
+Long term vision:
+1- the choice of receiver type and location , and motion pattern.
+2- the choice of transmitter type and distribution
+3- choice between first, second reflection
+4- 3D visualization of the different rays.
+5- menu to decide the parametres (reflectivity, area elements, ...etc )
+6- vertical optimization of speed and reuse of cached results (rays values and angles for the same room setting.)
+7- command line integration.
+    - create room
+    - left wall 4x8 , ...and so on
+    - attach receiver ADr at 1,1,1
+    ...etc
 
- {Main}-----> {Reciver}
-
- The main caller gives the receiver the different rays, their received power value and their angles and times. The receiver calcs based on its type
- - needs a lot of memory, but well organized.
 """
-
 
 
 """This version contains the single matrix of the program,
@@ -29,6 +34,8 @@ easier in the code, at the expense of more memory. same computation as only the 
 
 import numpy as np
 import matplotlib.pyplot as plt
+from RoomGeometry import Room_Geometry
+from Receiver import Receiver
 
 Lambertian_order = 1
 Element_area = 5*5  # 5cm*5cm
@@ -102,6 +109,7 @@ def get_elevation(current_element, Receiver):
     print(current_element, Receiver, R, delta_z, elevation)
     return elevation
 
+
 def calc_power_at_position(receiver_x,receiver_y):
     print("function called at X:", receiver_x, "and Y: ",receiver_y)
     Access_point = np.array([200,400,100])
@@ -120,6 +128,9 @@ def calc_power_at_position(receiver_x,receiver_y):
         for x in range(0,first_dimension,element_width): #Step is in centimeters
             for y in range(0,second_dimension,element_width):
                 #Get distance form source
+
+
+                #the points here are Access point and current element
                 current_element = np.array([x,y,z])
                 distance = np.linalg.norm(Access_point - current_element)
                 Total_distance = distance #to keep track of the total distance
@@ -129,8 +140,17 @@ def calc_power_at_position(receiver_x,receiver_y):
                 #print("height: ", height, "distance 1:", distance, "Tx_angle1: ", Tx_angle*180/np.pi)
 
                 Rx_angle = Tx_angle
+
                 Power_at_surface = Transmit_power * (Lambertian_order+1)* Element_area * \
                 np.power(np.cos(Tx_angle),Lambertian_order) * np.cos(Rx_angle) / (4*np.pi * np.power(distance,2))
+
+
+                """testing the new approach
+                Geo = Room_Geometry(400,800,300)
+                Geo.set_points(Access_point, current_element)
+                pr = Geo.calc_power_at_dest(Transmit_power, element_area)
+                print("comparison: ", Power_at_surface, pr)
+                """
 
                 #we need to calculate distance from wall element to the receiver
                 distance = np.linalg.norm(current_element - Receiver)
@@ -141,6 +161,13 @@ def calc_power_at_position(receiver_x,receiver_y):
 
                 Power_at_receiver = Power_at_surface * reflection_coeff * Receiver_area * (Lambertian_order+1)* Element_area * \
                     np.power(np.cos(Tx_angle),Lambertian_order) * np.cos(Rx_angle) / (4 * np.pi * np.power(distance,2))
+
+                """testing the new approach
+                Geo = Room_Geometry(400,800,300)
+                Geo.set_points(current_element, Receiver)
+                pr = Geo.calc_power_at_dest(Transmit_power, Receiver_area)
+                print("comparison: ", Power_at_surface, pr)
+                """
                 Power_at_receiver = Power_at_receiver * Concentrator_gain * Filter_gain
                 Power_at_receiver = Power_at_receiver*1e10
                 #print("power at the receiver: ", Power_at_receiver*1e10)
@@ -176,15 +203,23 @@ def main():
     count_y=0
     power_xy=np.zeros((10,20))
     x=400
-    for y in range(0,900,100):
-        print(get_elevation([x,y,300],[200,40,100]))
+    Rec = Receiver(10,20,10)
+    Rec.set_type("IM")
+    print(Rec)
+    Rec.change_height(140)
+    print(Rec)
+    Geo = Room_Geometry(300,300,300)
+    Geo.set_points([10,10,10], [100,200,300])
+    print(Geo)
+    #for y in range(0,900,100):
+        #print(get_elevation([x,y,300],[200,40,100]))
         #[Angle, Elevation]=get_elevation_and_azimuth_angles([x,y,300],[200,0,100])
     """
     for i in range(10):
         for j in range(20):
             print(i,j)
-            [power, Time, powers]=calc_power_at_position(i*40,j*40)
-            power_xy[i,j]=power
+            [power, Time, powers] = calc_power_at_position(i*40,j*40)
+            power_xy[i,j] = power
 
 
     plt.imshow(power_xy, cmap='hot', interpolation='nearest')
@@ -195,11 +230,11 @@ def main():
 
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
      main()
 
 
-"""Testing the program works:
+""" Testing the program works:
 1- check first that get wall parameters returns the correct values
 2- check that inside the loop of the get values, each wall has the same range of dimensions
 
